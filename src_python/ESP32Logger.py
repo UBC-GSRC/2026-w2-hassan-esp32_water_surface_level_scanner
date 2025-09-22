@@ -8,7 +8,7 @@ import threading
 import json
 
 class ESP32Logger:
-    def __init__(self, port="COM4", baud_rate=115200):
+    def __init__(self, port="COM1", baud_rate=115200):
         self._COM = port
         self._baud = baud_rate
         self._timestamps = []
@@ -48,8 +48,8 @@ class ESP32Logger:
         self._flag_record = False
         self._thread.join()
 
-    def get_data(self):
-        return np.hstack((
+    def get_data(self, filtered = True):
+        data = np.hstack((
             np.array(self._timestamps)[:, np.newaxis],
             np.array(self._index)[:, np.newaxis],
             np.array(self._statuses)[:, np.newaxis],
@@ -58,6 +58,10 @@ class ESP32Logger:
             np.array(self._z)[:, np.newaxis]
         ))
 
+        if filtered:
+            return data[np.logical_and(data[:,2] != 255, data[:,5] != 0)]
+        else:
+            return data
 
     def record_data_point(self, data_point:dict):
         # Make sure the timestamps are relative to the start of recording
@@ -77,7 +81,7 @@ class ESP32Logger:
 
 
 def main():
-    logger = ESP32Logger(port="COM4", baud_rate=115200)
+    logger = ESP32Logger(port="COM3", baud_rate=115200)
     logger.start_recording()
     input("Press Enter to stop recording...\n")
     logger.stop_recording()

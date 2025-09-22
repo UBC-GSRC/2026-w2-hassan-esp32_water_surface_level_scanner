@@ -7,7 +7,7 @@ import numpy as np
 import time
 
 class CartLogger:
-    def __init__(self, sample_rate_hz = 2):
+    def __init__(self, sample_rate_hz = 10):
         self._cc = CameraCart.CameraCart()
         self._flag_record = False
         self._thread = None

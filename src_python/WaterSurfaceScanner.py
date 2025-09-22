@@ -16,16 +16,16 @@ from pytransform3d.transform_manager import (
 
 class WaterSurfaceScanner:
     def __init__(self):
-        self._esp_logger = ESP32Logger.ESP32Logger()
+        self._esp_logger = ESP32Logger.ESP32Logger(port="COM3")
         self._cart_logger = CartLogger.CartLogger()
 
         # Offsets are in meters and rotations are in radians
         self._cart2flume_x_offset = 0.0
-        self._cart2flume_z_offset = 1.0
+        self._cart2flume_z_offset = 800.0 #mm
 
         self._sensor2cart_x_offset = 0.0
-        self._sensor2cart_y_offset = 0.5 
-        self._sensor2cart_z_offset = -0.1
+        self._sensor2cart_y_offset = 500.0 #mm 
+        self._sensor2cart_z_offset = 0.0 
         self._sensor2cart_x_rotation = np.pi
         self._sensor2cart_y_rotation = 0.0
         self._sensor2cart_z_rotation = np.pi
@@ -58,12 +58,7 @@ class WaterSurfaceScanner:
 
         # Translation between each distance measurement from the sensor to the sensor origin for each sensor zone
         sensor_data = self._esp_logger.get_data()
-        self.define_measurement_i_2sensor_transforms(sensor_data[:,0], # timestamps
-                                                     sensor_data[:,1], # idxs
-                                                     sensor_data[:,3], # x positions
-                                                     sensor_data[:,4], # y positions
-                                                     sensor_data[:,5]  # z positions
-        )
+        self.define_measurement_i_2sensor_transforms(sensor_data)
 
     def define_cart2flume_transform(self, timestamps:np.array, y_positions:np.array, x_offset:float, z_offset:float):
         """The cart will have constant x and z offsets but the y position will vary over time."""
@@ -118,7 +113,10 @@ class WaterSurfaceScanner:
             T_i = pt.transform_from(R_const, np.array([x_positions[i], y_positions[i], z_positions[i]]))
             pqs.append(pt.pq_from_transform(T_i))
 
-        self.transforms[f"measurement{idx}2sensor"] = NumpyTimeseriesTransform(timestamps, np.array(pqs))
+        try:
+            self.transforms[f"measurement{idx}2sensor"] = NumpyTimeseriesTransform(timestamps, np.array(pqs))
+        except:
+            self.transforms[f"measurement{idx}2sensor"] = None
 
     def start_recording(self,):
         """Start recording data from both the ESP32 sensor and the camera cart."""
@@ -130,37 +128,48 @@ class WaterSurfaceScanner:
         self._esp_logger.stop_recording()
         self._cart_logger.stop_recording()
     
-    def add_transforms(self, transforms:dict):
+    def add_transforms(self):
         """Create a TemporalTransformManager from the defined transforms."""
         self.tm.add_transform("cart", "flume", self.transforms["cart2flume"])
         self.tm.add_transform("sensor", "cart", self.transforms["sensor2cart"])
         for i in range(64): 
-            self.tm.add_transform(f"measurement{i}", "sensor", self.transforms[f'measurement{i}2sensor'])
+            if self.transforms[f"measurement{i}2sensor"] is not None:
+                self.tm.add_transform(f"measurement{i}", "sensor", self.transforms[f'measurement{i}2sensor'])
 
     def get_water_surface_data(self,):
         """Get the transformed water surface data as a numpy array at the sensor recording timestamps."""
         origin_const = pt.vector_to_point([0.0, 0.0, 0.0]) # using the origin of the frame to transform
-        timestamps_unique = np.unique(self._esp_logger.get_data()[:, 1])
+        timestamps_unique = np.unique(self._esp_logger.get_data()[:, 0])
         
-        timestamps = []
+        times = []
         idxs = []
         x_transformed = []
         y_transformed = []
         z_transformed = []
 
-        # Transform each data point for each measurement zone for every time the sensor was read
-        for timestamp in timestamps_unique:
-            for i in range(64):
-                transform_i = self.tm.get_transform_at_time(f"measurement{i}", "flume", timestamp)
-                pos = pt.transform(transform_i, origin_const)[:-1]
-                timestamps.append(timestamp)
-                x_transformed.append(pos[0])
-                y_transformed.append(pos[1])
-                z_transformed.append(pos[2])
-                idxs.append(i)
+        # Iterate through each measurement zone
+        for i in range(64):
+            # Get all of the recording times for that measurement zone and transform them into the correct reference frame
+            if self.transforms[f"measurement{i}2sensor"] is not None:
+                timestamps = self.transforms[f'measurement{i}2sensor'].time
+                for timestamp in timestamps:
+                    if timestamp > self.transforms["cart2flume"].time[-1]: # ignore all data points from the sensor that came after the cart stopped moving
+                        continue
+                    elif len(timestamps) <= 1:
+                        continue
+                    elif timestamp == timestamps[-1]:
+                        transform_i = self.tm.get_transform_at_time(f"measurement{i}", "flume", timestamp-1) # Weird error when you use the exact final timestamp... hopefully interpolation at 1 ms before works fine
+                    else:
+                        transform_i = self.tm.get_transform_at_time(f"measurement{i}", "flume", timestamp) # Use the recorded datapoint
+                    pos = pt.transform(transform_i, origin_const)[:-1]
+                    times.append(timestamp)
+                    x_transformed.append(pos[0])
+                    y_transformed.append(pos[1])
+                    z_transformed.append(pos[2])
+                    idxs.append(i)
         
         return np.hstack((
-            np.array(timestamps)[:, np.newaxis],
+            np.array(times)[:, np.newaxis],
             np.array(idxs)[:, np.newaxis],
             np.array(x_transformed)[:, np.newaxis],
             np.array(y_transformed)[:, np.newaxis],

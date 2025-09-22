@@ -10,6 +10,7 @@ from BinaryCommunication import BinaryCommunication
 import time
 import wmi
 import subprocess
+import numpy as np
 
 class CameraCart:
     def __init__(self, ip = '192.168.100.94'):
@@ -61,22 +62,36 @@ class CameraCart:
         print("Connecting cameras.")
         self.camera.connect()
     
-    def jog_relative(self, blocking = True):
-        pass
+    def jog_relative(self, value:int, blocking = True):
+        self.com.move(self.cartAxle, value, 'r')
+
+        if blocking:
+            block = self.get_moving_status()
+            while block:
+                block = self.get_moving_status()
+                time.sleep(0.1)
+
 
     def jog_absolute(self, value:int, blocking = True):
         if not self.get_home_successful():
             raise Exception("The cart has NOT been homed. Do not use absolute reference frame without successfully homing to ensure an expected coordinate system.")
         
+        print(f"Cart Moving Status: {self.get_moving_status()}")
         self.com.move(self.cartAxle,value, Movement='a')
         time.sleep(2) # allow the controller to receive the message before moving forward. TODO: Involve a handshake here
 
+        block = self.get_moving_status()
+        while block:
 
-        while self.get_moving_status():
-            time.sleep(1)
+            block = self.get_moving_status()
+            time.sleep(0.1)
 
     def get_moving_status(self):
-        return self.com.requestBit(self.cartAxle, 4112, 5)
+        # TODO: This may not work correctly
+        res = np.binary_repr(np.float32(self.com.requestParameter(self.cartAxle, 4120)[1]).view(np.int32), width=32)
+        is_moving = res[10]
+
+        return int(is_moving)
 
     def get_home_status(self):
         pass
@@ -112,11 +127,19 @@ class CameraCart:
     
 def main():
     cc = CameraCart()
-    t1, position1 = cc.get_position()
-    print(f'Time:{t1} Position:{position1}')
-    time.sleep(2)
-    t2, position2 = cc.get_position()
-    print(f'Time:{t2 - t1} Position:{position2}')
+    # t1, position1 = cc.get_position()
+    res = np.binary_repr(np.float32(cc.com.requestParameter(cc.cartAxle, 4120)[1]).view(np.int32), width=32)
+    print(f'Parameter P4120 {res} bit {res[10]}')
+    cc.com.move(cc.cartAxle, 1000, 'a')
+    for i in range(10):
+        # res = np.binary_repr(np.float32(cc.com.requestParameter(cc.cartAxle, 4120)[1]).view(np.int32), width=32)
+        # print(f'Parameter P4120 {res} bit {res[10]}')
+        print(f"Moving status {cc.get_moving_status()}")
+        time.sleep(0.5)
+    # print(f'Time:{t1} Position:{position1}')
+    # time.sleep(2)
+    # # t2, position2 = cc.get_position()
+    # print(f'Time:{t2 - t1} Position:{position2}')
 
 if __name__ == "__main__":
     main()
