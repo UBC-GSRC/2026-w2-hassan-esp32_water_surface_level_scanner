@@ -1,4 +1,3 @@
 dependencies:
-  rjrp44/vl53l5cx: ^4.0.0
-description: VL53L5CX basic ranging example
+description: Communicating bidirectional data to and from a data acquisition esp32.
 version: 1.0.0

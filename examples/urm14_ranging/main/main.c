@@ -104,14 +104,8 @@ static esp_err_t read_distance(uint16_t *value)
     return mbc_master_send_request(mb_handle, &req, value);
 }
 
-/* ---------------- Application ---------------- */
-
-void app_main(void)
+void init_urm14(void)
 {
-    uint16_t raw_distance;
-
-    /* === Arduino setup() equivalent === */
-
     modbus_master_init();
 
     cr |= MEASURE_MODE_BIT;                 // Trigger mode
@@ -121,7 +115,18 @@ void app_main(void)
     write_control(cr);                      // Same as Arduino setup()
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    ESP_LOGI(TAG, "URM14 configured");
+    // ESP_LOGI(TAG, "URM14 configured");
+}
+
+/* ---------------- Application ---------------- */
+
+void app_main(void)
+{
+    uint16_t raw_distance;
+
+    /* === Arduino setup() equivalent === */
+
+    init_urm14();
 
     /* === Arduino loop() equivalent === */
 

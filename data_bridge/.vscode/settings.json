@@ -16,5 +16,6 @@
   "files.associations": {
     "vl53l5cx_api.h": "c",
     "platform.h": "c"
-  }
+  },
+  "idf.currentSetup": "c:\\Espressif\\frameworks\\esp-idf-v5.5"
 }
