@@ -15,7 +15,7 @@
 
 #include "driver/gpio.h"
 
-static const char* TAG = "ESP-NOW RX TX Data Acquisition";
+static const char* TAG = "Data Acquisition";
 
 // ------------------ Camera Section Below -------------------
 // from https://github.com/espressif/esp-idf/blob/v6.0/examples/peripherals/gpio/generic_gpio/main/gpio_example_main.c
@@ -161,6 +161,9 @@ void init_urm14(void)
 
 // -------------------- ESP-NOW Section Below ---------------------
 
+#define ESP_NOW_MASTER_NODE_ID 0
+#define ESP_NOW_SELF_NODE_ID 1
+#define PEER_MAC_ADDR {0xd0,0xcf,0x13,0xe0,0xec,0xa4};
 
 void esp_now_send_callback(const esp_now_send_info_t *tx_info, esp_now_send_status_t status)
 {
@@ -181,11 +184,26 @@ void esp_now_recv_callback(const esp_now_recv_info_t * esp_now_info, const uint8
 
   ESP_LOGI(TAG, "Received data packet: node_id=%d, trigger_shutter=%d, measure_distance=%d, distance_mm=%.1f", data_packet_recv.node_id, data_packet_recv.trigger_shutter, data_packet_recv.measure_distance, data_packet_recv.distance_mm / 10.0f);
 
-  if (data_packet_recv.node_id == 2 && data_packet_recv.trigger_shutter && gpio_get_level(CAMERA_PIN) == 0) {
-    ESP_LOGI(TAG, "Triggering camera shutter!");
-    gpio_set_level(CAMERA_PIN, 1);
-    vTaskDelay(pdMS_TO_TICKS(500)); // Keep the pin high for 500 ms
-    gpio_set_level(CAMERA_PIN, 0);
+  data_packet_t response_packet;
+  if (data_packet_recv.node_id == ESP_NOW_MASTER_NODE_ID) {
+    response_packet.node_id = ESP_NOW_SELF_NODE_ID;
+    response_packet.trigger_shutter = data_packet_recv.trigger_shutter;
+    response_packet.measure_distance = data_packet_recv.measure_distance;
+    response_packet.distance_mm = 0; // default to 0, will update if distance measurement is requested
+
+    if (data_packet_recv.trigger_shutter && gpio_get_level(CAMERA_PIN) == 0)
+    {
+        ESP_LOGI(TAG, "Triggering camera shutter!");
+        gpio_set_level(CAMERA_PIN, 1);
+        vTaskDelay(pdMS_TO_TICKS(500)); // Keep the pin high for 500 ms
+        gpio_set_level(CAMERA_PIN, 0);
+    }
+
+    if (data_packet_recv.measure_distance) {
+        response_packet.distance_mm = read_urm14_distance();
+        ESP_LOGI(TAG, "Distance measurement requested, current distance = %.1f mm", response_packet.distance_mm / 10.0f);
+    }
+    esp_err_t err = esp_now_send(esp_now_info->src_addr, (uint8_t *)&response_packet, sizeof(response_packet));
   }
 }
 
@@ -225,7 +243,7 @@ void app_main(void)
   esp_now_peer_info_t peer_info = {0};
   peer_info.channel = 1; 
   peer_info.encrypt = false;
-  uint8_t peer_mac[6] = {0xd0,0xcf,0x13,0xe0,0xec,0xa4}; // camera cart
+  uint8_t peer_mac[6] = {0xd0,0xcf,0x13,0xe0,0xec,0xa4}; // data_bridge
 
   memcpy(peer_info.peer_addr, peer_mac, 6);
   esp_now_add_peer(&peer_info);
@@ -235,16 +253,17 @@ void app_main(void)
     // esp_err_t err = esp_now_send(esp_mac, (uint8_t *) "Sending via ESP-NOW", strlen("Sending via ESP-NOW"));
     // const uint8_t message[] = "Message sent from data acquisition";
 
-    data_packet_t data_packet = {
-      .node_id = 1,
-      .trigger_shutter = false,
-      .measure_distance = true,
-      .distance_mm = read_urm14_distance() // example distance in mm (123.4 cm)
-    };
+    // NOTE: uncomment below to send distance measurements periodically without waiting for a request
+    // data_packet_t data_packet = {
+    //   .node_id = ESP_NOW_SELF_NODE_ID,
+    //   .trigger_shutter = false,
+    //   .measure_distance = true,
+    //   .distance_mm = read_urm14_distance() // example distance in mm (123.4 cm)
+    // };
+    // esp_err_t err = esp_now_send(peer_mac, (uint8_t *)&data_packet, sizeof(data_packet));   
+    // ESP_LOGI(TAG,"esp now status : %s", esp_err_to_name(err));
 
-    esp_err_t err = esp_now_send(peer_mac, (uint8_t *)&data_packet, sizeof(data_packet));   
-    ESP_LOGI(TAG,"esp now status : %s", esp_err_to_name(err));
     
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
