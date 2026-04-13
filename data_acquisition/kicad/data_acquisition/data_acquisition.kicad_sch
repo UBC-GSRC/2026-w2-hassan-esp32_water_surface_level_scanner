@@ -2629,6 +2629,16 @@
 			(embedded_fonts no)
 		)
 	)
+	(text "Wire Color Legend:\nOrange -- VCC\nBlack  -- GND\nBlue   -- RS485-B\nWhilte -- RS485-A\n"
+		(exclude_from_sim no)
+		(at 27.178 101.6 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+		)
+		(uuid "34cae775-4bfe-45a8-83cc-abdfd1577fd2")
+	)
 	(text "Note:\nTX (module) <--> RX (ESP32)\nRX (module) <--> TX (ESP32)"
 		(exclude_from_sim no)
 		(at 207.264 69.596 0)
