@@ -1,5 +1,10 @@
-# esp32-sense-and-send
+# Water Surface Scanner Electronics V1.0 
 An 18m flume in the Flume Lab at UBC can benefit from having better water surface level data during experiments. The flume is already equipped with a Parker linear rail that traverses the length of the flume. This project is to avoid the mess of adding another wire connection to the cart on the linear rail. Another ESP32 is needed for ESP-NOW.
+
+## Testing
+
+We ran this device on the 18m flume for a two month long experiment. Around a span of 120 experiment hours and every 15 minutes or so we have a scan. 
+Manual measurements were coordinated to be taken at the same time the sensor took the scans for us to compare. Manual measurements are very difficult to take as the water oscillates multiple cm while you're trying to pick the right number. 
 
 ## Components
 - ESP32C5 x 2
@@ -17,7 +22,11 @@ There are three computers involved in this system. The first computer is an ESP3
 
 ### Data Acquisition ESP32
 
+The data acquisiton esp32 reads data from the RS485 port when prompted to from the data bridge. It just reads the sensor and sends it back to the host when commanded to.
+
 ### Data Bridge ESP32
+
+The data bridge esp32 controls the data acquisition board over ESPNOW. It basically just asks for data and gets data in return. 
 
 ### Camera Cart Computer
 
