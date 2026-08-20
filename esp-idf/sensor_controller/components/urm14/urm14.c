@@ -18,8 +18,9 @@ static const char *TAG = "URM14";
 #define MB_RXD         18
 #define MB_RTS         UART_PIN_NO_CHANGE
 
-#define SLAVE_ADDR     0x11
+#define PUBLIC_ADDR    0x00
 
+#define REG_ADDR       2
 #define REG_DISTANCE   5
 #define REG_CONTROL    8
 
@@ -28,25 +29,16 @@ static const char *TAG = "URM14";
 #define MEASURE_MODE_BIT       (1 << 2)
 #define MEASURE_TRIG_BIT       (1 << 3)
 
-#define PUBLIC_ADDR   0x00
-
-#define REG_PID       0
-#define REG_VID       1
-#define REG_ADDR      2
-#define REG_BAUD      3
-#define REG_PARITY    4
-#define REG_DISTANCE  5
-#define REG_INT_TEMP  6
-#define REG_EXT_TEMP  7
-#define REG_CONTROL   8
-#define REG_NOISE     9
-
 static void *mb_handle = NULL;
-static uint16_t cr = 0;
-static bool initialized = false;
+static bool modbus_initialized = false;
 
 static void modbus_master_init(void)
 {
+    if (modbus_initialized)
+    {
+        return;
+    }
+
     mb_communication_info_t comm = {
         .ser_opts.port = MB_UART_PORT,
         .ser_opts.mode = MB_RTU,
@@ -57,14 +49,10 @@ static void modbus_master_init(void)
         .ser_opts.response_tout_ms = 3000
     };
 
-    ESP_LOGI(TAG, "Creating Modbus master");
-
     ESP_ERROR_CHECK(
         mbc_master_create_serial(
             &comm,
             &mb_handle));
-
-    ESP_LOGI(TAG, "mb_handle=%p", mb_handle);
 
     ESP_ERROR_CHECK(
         uart_set_pin(
@@ -79,24 +67,24 @@ static void modbus_master_init(void)
             MB_UART_PORT,
             UART_MODE_RS485_HALF_DUPLEX));
 
-    esp_err_t err = mbc_master_start(mb_handle);
+    ESP_ERROR_CHECK(
+        mbc_master_start(
+            mb_handle));
 
-    ESP_LOGI(
-        TAG,
-        "mbc_master_start() = %s",
-        esp_err_to_name(err));
-
-    ESP_ERROR_CHECK(err);
+    modbus_initialized = true;
 
     ESP_LOGI(TAG, "Modbus RTU master initialized");
 }
 
-static esp_err_t write_control(uint16_t value)
+static esp_err_t write_register(
+    uint16_t slave_addr,
+    uint16_t reg,
+    uint16_t value)
 {
     mb_param_request_t req = {
-        .slave_addr = SLAVE_ADDR,
+        .slave_addr = slave_addr,
         .command = 0x06,
-        .reg_start = REG_CONTROL,
+        .reg_start = reg,
         .reg_size = 1
     };
 
@@ -106,10 +94,12 @@ static esp_err_t write_control(uint16_t value)
         &value);
 }
 
-static esp_err_t read_distance_register(uint16_t *value)
+static esp_err_t read_distance_register(
+    uint16_t slave_addr,
+    uint16_t *value)
 {
     mb_param_request_t req = {
-        .slave_addr = SLAVE_ADDR,
+        .slave_addr = slave_addr,
         .command = 0x03,
         .reg_start = REG_DISTANCE,
         .reg_size = 1
@@ -121,41 +111,46 @@ static esp_err_t read_distance_register(uint16_t *value)
         value);
 }
 
-void urm14_init(void)
+bool urm14_init(urm14_t *sensor)
 {
-    if (initialized)
-    {
-        return;
-    }
-
     modbus_master_init();
 
-    cr |= MEASURE_MODE_BIT;
-    cr &= ~TEMP_CPT_SEL_BIT;
-    cr &= ~TEMP_CPT_ENABLE_BIT;
+    sensor->control_register = 0;
 
-    ESP_ERROR_CHECK(write_control(cr));
+    sensor->control_register |= MEASURE_MODE_BIT;
+    sensor->control_register &= ~TEMP_CPT_SEL_BIT;
+    sensor->control_register &= ~TEMP_CPT_ENABLE_BIT;
+
+    ESP_ERROR_CHECK(
+        write_register(
+            sensor->slave_addr,
+            REG_CONTROL,
+            sensor->control_register));
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    initialized = true;
+    ESP_LOGI(
+        TAG,
+        "URM14 configured at address 0x%02X",
+        sensor->slave_addr);
 
-    ESP_LOGI(TAG, "URM14 configured");
+    return true;
 }
 
-uint16_t urm14_read_distance(void)
+uint16_t urm14_read_distance(urm14_t *sensor)
 {
-    if (!initialized)
-    {
-        ESP_LOGE(TAG, "URM14 not initialized");
-        return 0;
-    }
+    sensor->control_register |= MEASURE_TRIG_BIT;
 
-    cr |= MEASURE_TRIG_BIT;
-
-    if (write_control(cr) != ESP_OK)
+    if (write_register(
+            sensor->slave_addr,
+            REG_CONTROL,
+            sensor->control_register) != ESP_OK)
     {
-        ESP_LOGW(TAG, "Failed to trigger measurement");
+        ESP_LOGW(
+            TAG,
+            "Failed to trigger measurement at address 0x%02X",
+            sensor->slave_addr);
+
         return 0;
     }
 
@@ -163,68 +158,70 @@ uint16_t urm14_read_distance(void)
 
     uint16_t raw_distance = 0;
 
-    if (read_distance_register(&raw_distance) == ESP_OK)
+    if (read_distance_register(
+            sensor->slave_addr,
+            &raw_distance) == ESP_OK)
     {
         ESP_LOGI(
             TAG,
-            "distance = %.1f mm (raw=%u)",
+            "Address 0x%02X distance = %.1f mm (raw=%u)",
+            sensor->slave_addr,
             raw_distance / 10.0f,
             raw_distance);
 
         return raw_distance;
     }
 
-    ESP_LOGW(TAG, "Read distance failed");
+    ESP_LOGW(
+        TAG,
+        "Read distance failed at address 0x%02X",
+        sensor->slave_addr);
 
     return 0;
 }
 
-bool urm14_self_test(void)
+bool urm14_self_test(urm14_t *sensor)
 {
-    ESP_LOGI(TAG, "Starting URM14 self test");
+    urm14_init(sensor);
 
-    urm14_init();
-
-    uint16_t distance = urm14_read_distance();
+    uint16_t distance =
+        urm14_read_distance(sensor);
 
     if (distance == 0)
     {
-        ESP_LOGE(TAG, "[FAIL] URM14");
-        return false;
+        ESP_LOGE(
+            TAG,
+            "[FAIL] URM14 0x%02X",
+            sensor->slave_addr);
+
+           return false;
     }
 
     ESP_LOGI(
         TAG,
-        "[PASS] URM14 distance = %.1f mm",
-        distance / 10.0f);
+        "[PASS] URM14 0x%02X",
+        sensor->slave_addr);
 
     return true;
 }
 
-bool urm14_set_address(uint16_t new_address)
+bool urm14_set_address(
+    urm14_t *sensor,
+    uint16_t new_address)
 {
-    if (!initialized)
-    {
-        urm14_init();
-    }
+    modbus_master_init();
 
-    mb_param_request_t req = {
-        .slave_addr = PUBLIC_ADDR,
-        .command = 0x06,
-        .reg_start = REG_ADDR,
-        .reg_size = 1
-    };
-
-    esp_err_t err = mbc_master_send_request(
-        mb_handle,
-        &req,
-        &new_address);
+    esp_err_t err =
+        write_register(
+            PUBLIC_ADDR,
+            REG_ADDR,
+            new_address);
 
     if (err != ESP_OK)
     {
         ESP_LOGE(
             TAG,
-            "Failed to change address to 0x%02X (%s)",
+            "Failed to set address to 0x%02X (%s)",
             new_address,
             esp_err_to_name(err));
 
@@ -236,9 +233,7 @@ bool urm14_set_address(uint16_t new_address)
         "Address changed to 0x%02X",
         new_address);
 
-    ESP_LOGI(
-        TAG,
-        "Power-cycle or reset the sensor for the new address to take effect");
+    sensor->slave_addr = new_address;
 
     return true;
 }

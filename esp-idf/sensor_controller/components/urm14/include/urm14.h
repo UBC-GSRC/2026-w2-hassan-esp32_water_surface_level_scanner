@@ -3,12 +3,18 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-void urm14_init(void);
+typedef struct
+{
+    uint16_t slave_addr;
+    uint16_t control_register;
+} urm14_t;
 
-uint16_t urm14_read_distance(void);
+bool urm14_init(urm14_t *sensor);
 
-bool urm14_self_test(void);
+uint16_t urm14_read_distance(urm14_t *sensor);
 
-bool urm14_set_address(uint16_t new_address);
+bool urm14_self_test(urm14_t *sensor);
 
-void urm14_scan(void);
+bool urm14_set_address(
+    urm14_t *sensor,
+    uint16_t new_address);
