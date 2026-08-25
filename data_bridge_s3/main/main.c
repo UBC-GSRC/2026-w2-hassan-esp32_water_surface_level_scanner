@@ -13,7 +13,10 @@
 
 #define ESP_NOW_PEER_NODE_ID 1
 #define ESP_NOW_SELF_NODE_ID 2
-#define PEER_MAC_ADDRESS {0xd0,0xcf,0x13,0xe0,0xcb,0xc4} // Address of data acquisition esp32
+
+static const uint8_t PEER_MAC_ADDRESS[6] = {
+0xac, 0xa7, 0x04, 0x2e, 0x21, 0x78
+};
 
 uint8_t esp_mac[6];
 static const char* TAG = "ESP-NOW RX";
@@ -46,7 +49,9 @@ void wifi_sta_init(void)
   esp_read_mac(esp_mac, ESP_MAC_WIFI_STA);
 
   // NOTE: Uncomment to get the MAC address of the ESP32 that is running this firmware
-  // ESP_LOGI(TAG, "peer mac " MACSTR "", esp_mac[0], esp_mac[1], esp_mac[2], esp_mac[3], esp_mac[4], esp_mac[5]);
+  printf("\n");
+  ESP_LOGI(TAG, "My mac " MACSTR "", esp_mac[0], esp_mac[1], esp_mac[2], esp_mac[3], esp_mac[4], esp_mac[5]);
+  printf("\n");
 }
 void app_main(void)
 {
@@ -78,9 +83,9 @@ void app_main(void)
     peer_info.channel = 1; 
     peer_info.encrypt = false;
 
-    uint8_t peer_mac[6] = {0xd0,0xcf,0x13,0xe0,0xcb,0xc4}; // computer bridge
+    // uint8_t peer_mac[6] = {0xd0,0xcf,0x13,0xe0,0xcb,0xc4}; // computer bridge
 
-    memcpy(peer_info.peer_addr, peer_mac, 6);
+    memcpy(peer_info.peer_addr, PEER_MAC_ADDRESS, 6);
     esp_now_add_peer(&peer_info);
 
     while(1)
@@ -93,7 +98,7 @@ void app_main(void)
         {
           // uart_write_bytes(uart_num, (const char *)&res, sizeof(res));
           // ESP_ERROR_CHECK(uart_wait_tx_done(uart_num, 100)); // wait timeout is 100 RTOS ticks (TickType_t)
-          esp_err_t err = esp_now_send(peer_mac, (uint8_t *)&res, sizeof(res));   
+          esp_err_t err = esp_now_send(PEER_MAC_ADDRESS, (uint8_t *)&res, sizeof(res));   
 
           vTaskDelay(pdMS_TO_TICKS(50)); // delay to prevent flooding the data acquisition esp32 with esp-now messages, which can cause packet loss
         }

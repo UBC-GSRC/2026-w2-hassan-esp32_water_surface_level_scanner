@@ -14,21 +14,26 @@ import struct
 import time
 
 class ESP32SerialController:
-    def __init__(self,com = "COM4"):
-        self.node_id = 0 # see type_definition/data_packet.h for type definition
+    def __init__(self,com = "COM31"):
+        self.default_node_id = 0 # see type_definition/data_packet.h for type definition
         self.struct_rule = '<B??H' # 1 + 1 + 1 + 2 = 5 bytes: 1 unsigned char, 2 bools, 1 unsigned short see format character table https://docs.python.org/3/library/struct.html#format-characters
         self.buffer_size = 1024 
         
         try:
-            self.port = serial.Serial(com, baudrate=115200, timeout=1)
+            self.port = serial.Serial(com, baudrate=115200, timeout=None)
             self.port.open()
+            print("Successfully opened port")
         except serial.SerialException as e:
             print(f"Error opening serial port: {e}")
+
+    def __del__(self):
+        if self.port is not None:
+            self.port.close()
 
     def trigger_camera(self)->bool:
         self.port.reset_input_buffer()
 
-        msg = struct.pack(self.struct_rule, self.node_id, True, False, 0)
+        msg = struct.pack(self.struct_rule, self.default_node_id, True, False, 0)
         self.port.write(msg)
         time.sleep(0.1)
 
@@ -43,14 +48,14 @@ class ESP32SerialController:
             print(f"Received bytes: {res_bytes}")
             return -1
         
-        time.sleep(0.1)
+        time.sleep(1) 
 
         return camera_triggered # return the camera trigger acknowledgement from the data_bridge
     
-    def get_distance(self)->int:
+    def get_distance(self, node = 0)->int:
         self.port.reset_input_buffer()
-
-        msg = struct.pack(self.struct_rule, self.node_id, False, True, 0)
+        
+        msg = struct.pack(self.struct_rule, node, False, True, 0)
         self.port.write(msg)
         time.sleep(0.1)
 
