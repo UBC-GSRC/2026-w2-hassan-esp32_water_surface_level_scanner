@@ -32,6 +32,17 @@ static const char *TAG = "URM14";
 static void *mb_handle = NULL;
 static bool modbus_initialized = false;
 
+const uint16_t sensor_addresses[] = {
+    0x01,
+    0x02,
+    0x03,
+    0x04
+};
+
+const size_t sensor_count =
+    sizeof(sensor_addresses) /
+    sizeof(sensor_addresses[0]);
+
 static void modbus_master_init(void)
 {
     if (modbus_initialized)

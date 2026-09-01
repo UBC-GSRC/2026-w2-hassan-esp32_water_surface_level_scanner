@@ -6,8 +6,9 @@
     "--compile-commands-dir=c:\\Users\\Adam\\code\\2026-w2-hassan-esp32_water_surface_level_scanner\\data_bridge_s3\\build"
   ],
   "idf.flashType": "UART",
-  "idf.portWin": "COM20",
+  "idf.portWin": "COM31",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
-  }
+  },
+  "idf.currentSetup": "c:\\Espressif\\frameworks\\esp-idf-v5.5"
 }

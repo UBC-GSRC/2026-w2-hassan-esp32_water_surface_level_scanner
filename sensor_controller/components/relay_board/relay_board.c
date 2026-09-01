@@ -30,7 +30,7 @@ static void write_outputs(void)
             -1));
 }
 
-void relay_board_init(void)
+bool relay_board_init(void)
 {
     i2c_master_bus_handle_t bus_handle;
 
@@ -72,19 +72,23 @@ void relay_board_init(void)
             -1));
 
     relay_all_off();
+
+    return true;
 }
 
-void relay_all_off(void)
+bool relay_all_off(void)
 {
     relay_state = 0xFF;
     write_outputs();
+
+    return true;
 }
 
-void relay_set(uint8_t relay, bool on)
+bool relay_set(uint8_t relay, bool on)
 {
     if (relay < 1 || relay > 8)
     {
-        return;
+        return false;
     }
 
     uint8_t bit = relay - 1;
@@ -99,6 +103,8 @@ void relay_set(uint8_t relay, bool on)
     }
 
     write_outputs();
+
+    return true;
 }
 
 bool relay_board_self_test(void)

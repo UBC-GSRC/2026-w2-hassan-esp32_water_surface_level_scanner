@@ -5,6 +5,7 @@
 
 typedef struct {
     uint8_t node_id;
+    uint8_t sensor_id;
     bool trigger_shutter;
     bool measure_distance; 
     uint16_t distance_mm; // value * 10 to preserve one decimal place

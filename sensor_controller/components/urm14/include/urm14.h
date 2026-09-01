@@ -2,6 +2,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
+
+extern const uint16_t sensor_addresses[];
+extern const size_t sensor_count;  
 
 typedef struct
 {

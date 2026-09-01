@@ -33,5 +33,6 @@
     "--query-driver=**",
     "--compile-commands-dir=c:\\Users\\Adam\\code\\2026-w2-hassan-esp32_water_surface_level_scanner\\esp-idf\\sensor_controller\\build"
   ],
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "python.defaultInterpreterPath": "c:\\Users\\Adam\\code\\2026-w2-hassan-esp32_water_surface_level_scanner\\.venv\\Scripts\\python.exe"
 }
