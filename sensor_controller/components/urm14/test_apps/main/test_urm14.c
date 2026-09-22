@@ -83,6 +83,7 @@ void app_main(void)
 
     RUN_TEST(test_urm14_init_multiple);
     RUN_TEST(test_urm14_read_distance_multiple);
-
+    printf("DONE.");
+    
     UNITY_END();
 }
