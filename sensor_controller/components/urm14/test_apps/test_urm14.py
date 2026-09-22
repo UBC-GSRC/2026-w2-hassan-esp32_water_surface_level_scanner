@@ -1,4 +1,4 @@
 from pytest_embedded import Dut
 
 def test_unity(dut: Dut):
-    dut.expect_exact("OK")
+    dut.expect_exact("fasdfasdfasdf")
