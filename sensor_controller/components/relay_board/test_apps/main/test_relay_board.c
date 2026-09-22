@@ -9,7 +9,7 @@ static void test_relay_board_init(void){
 
 static void test_relay_1(void){
     TEST_ASSERT_TRUE(relay_set(1, true));
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(5000));
 }
 
 static void test_relay_2(void){
@@ -19,7 +19,7 @@ static void test_relay_2(void){
 
 static void test_relay_3(void){
     TEST_ASSERT_TRUE(relay_set(3, true));
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(5000));
 }
 
 static void test_relay_4(void){
@@ -29,7 +29,7 @@ static void test_relay_4(void){
 
 static void test_relay_5(void){
     TEST_ASSERT_TRUE(relay_set(5, true));
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(5000));
 }
 
 static void test_relay_6(void){
@@ -39,7 +39,7 @@ static void test_relay_6(void){
 
 static void test_relay_7(void){
     TEST_ASSERT_TRUE(relay_set(7, true));
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(5000));
 }
 
 static void test_relay_8(void){
