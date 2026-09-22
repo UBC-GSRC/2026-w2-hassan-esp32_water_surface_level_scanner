@@ -1,0 +1,14 @@
+{
+  "idf.currentSetup": "c:\\Espressif\\frameworks\\esp-idf-v5.5",
+  "idf.flashType": "UART",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3"
+  },
+  "clangd.path": "c:\\Espressif\\frameworks\\esp-idf-v5.5\\tools\\tools\\esp-clang\\esp-19.1.2_20250312\\esp-clang\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=c:\\Users\\Adam\\code\\2026-w2-hassan-esp32_water_surface_level_scanner\\data_bridge_s3\\components\\data_bridge\\test_apps\\build"
+  ],
+  "idf.portWin": "COM31"
+}

@@ -7,10 +7,16 @@
 #include "esp_log.h"
 #include "string.h"
 #include "driver/usb_serial_jtag.h"
-
+#include "esp_wifi.h"
+#include "esp_mac.h"
+#include "esp_log.h"
+#include "nvs_flash.h"
+#include "esp_now.h"
 
 #define BUF_SIZE (1024)
 #define ECHO_TASK_STACK_SIZE (4096)
+
+uint8_t esp_mac[6]; 
 
 static void read_usb_serial(void *arg)
 {

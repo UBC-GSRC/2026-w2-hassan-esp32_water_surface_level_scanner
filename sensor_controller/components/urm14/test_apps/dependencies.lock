@@ -15,6 +15,7 @@ dependencies:
     version: 5.5.0
 direct_dependencies:
 - espressif/esp-modbus
-manifest_hash: c9d04de7519eb1fdfc4a4abaf550792f1f8882071adba077b6aae911b8341b58
+- idf
+manifest_hash: 42dd4589e019fcd8f740d6ed0fd30928258c1819ec580f236bc1c12a063a0bf2
 target: esp32s3
 version: 2.0.0
