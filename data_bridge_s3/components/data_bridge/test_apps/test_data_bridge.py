@@ -24,5 +24,3 @@ def test_unity(dut: Dut):
         "node=1 sensor=2 shutter=1 measure=0 distance=1234"
     )
     
-
-

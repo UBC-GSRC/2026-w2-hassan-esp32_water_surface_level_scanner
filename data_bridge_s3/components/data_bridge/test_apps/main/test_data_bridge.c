@@ -48,6 +48,10 @@ void test_serial_parsing(void)
     }
 }
 
+void test_send_esp_now(void){
+    
+}
+
 void app_main(void)
 {
     UNITY_BEGIN();

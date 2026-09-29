@@ -1,0 +1,4 @@
+2026-09-29 13:22:15 INFO Target: esp32s3, Port: COM31
+2026-09-29 13:22:22 INFO Target: esp32s3, Port: COM20
+2026-09-29 13:22:54 INFO Created unity output junit report: C:\Users\Adam\AppData\Local\Temp\pytest-embedded\2026-09-29_20-22-15-335324\test_espnow_link[2]\dut-0.xml
+2026-09-29 13:22:54 INFO Created unity output junit report: C:\Users\Adam\AppData\Local\Temp\pytest-embedded\2026-09-29_20-22-15-335324\test_espnow_link[2]\dut-1.xml

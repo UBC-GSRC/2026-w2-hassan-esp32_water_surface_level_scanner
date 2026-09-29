@@ -1,8 +1,7 @@
 idf_component_register(
-    SRCS "test_data_bridge.c"
+    SRCS "test_espnow_link.c"
     INCLUDE_DIRS 
         "."
         "../../../../../type_definitions"
-    REQUIREs
-        espnow_link
+    REQUIRES unity espnow_link esp_wifi
 )

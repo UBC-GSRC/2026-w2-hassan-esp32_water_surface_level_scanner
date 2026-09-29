@@ -10,5 +10,6 @@
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
-  "idf.currentSetup": "c:\\Espressif\\frameworks\\esp-idf-v5.5"
+  "idf.currentSetup": "C:/Espressif/frameworks/esp-idf-v5.5/",
+  "idf.port": "COM31"
 }
