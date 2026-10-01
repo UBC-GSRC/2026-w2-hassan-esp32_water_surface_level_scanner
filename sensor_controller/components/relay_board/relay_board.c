@@ -84,6 +84,14 @@ bool relay_all_off(void)
     return true;
 }
 
+bool relay_all_on(void)
+{
+    relay_state = 0x00;
+    write_outputs();
+
+    return true;
+}
+
 bool relay_set(uint8_t relay, bool on)
 {
     if (relay < 1 || relay > 8)

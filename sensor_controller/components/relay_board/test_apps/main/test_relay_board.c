@@ -47,11 +47,19 @@ static void test_relay_8(void){
     vTaskDelay(pdMS_TO_TICKS(500));
 }
 
+static void test_relay_all_on(void){
+    relay_all_off();
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    TEST_ASSERT_TRUE(relay_all_on());
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    relay_all_off();
+}
 void app_main(void)
 {
     UNITY_BEGIN();
 
     RUN_TEST(test_relay_board_init);
+    RUN_TEST(test_relay_all_on);
     RUN_TEST(test_relay_1);
     RUN_TEST(test_relay_2);
     RUN_TEST(test_relay_3);
