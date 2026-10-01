@@ -87,11 +87,10 @@ def main():
             camera_shutter = controller.trigger_camera()
             print(f"Camera shutter triggered: {camera_shutter}")
 
-            for i in range(1000):
-                for id in urm14_sensors:
-                    distance = controller.get_distance(sensor_id=id)
-                    print(f"Distance measured: {distance} mm")
-                    # time.sleep(0.05)
+            for id in urm14_sensors:
+                distance = controller.get_distance(sensor_id=id)
+                print(f"Distance measured: {distance} mm")
+                # time.sleep(0.05)
     except KeyboardInterrupt:
         if controller.port.is_open:
             controller.port.close()
