@@ -165,21 +165,12 @@ uint16_t urm14_read_distance(urm14_t *sensor)
         return 0;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(33));
 
     uint16_t raw_distance = 0;
 
-    if (read_distance_register(
-            sensor->slave_addr,
-            &raw_distance) == ESP_OK)
+    if (read_distance_register(sensor->slave_addr, &raw_distance) == ESP_OK)
     {
-        ESP_LOGI(
-            TAG,
-            "Address 0x%02X distance = %.1f mm (raw=%u)",
-            sensor->slave_addr,
-            raw_distance / 10.0f,
-            raw_distance);
-
         return raw_distance;
     }
 
@@ -195,8 +186,7 @@ bool urm14_self_test(urm14_t *sensor)
 {
     urm14_init(sensor);
 
-    uint16_t distance =
-        urm14_read_distance(sensor);
+    uint16_t distance = urm14_read_distance(sensor);
 
     if (distance == 0)
     {
@@ -216,9 +206,7 @@ bool urm14_self_test(urm14_t *sensor)
     return true;
 }
 
-bool urm14_set_address(
-    urm14_t *sensor,
-    uint16_t new_address)
+bool urm14_set_address(urm14_t *sensor, uint16_t new_address)
 {
     modbus_master_init();
 
