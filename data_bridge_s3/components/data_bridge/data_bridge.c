@@ -34,7 +34,7 @@ void app_main(void)
 
     rx_item_t item;
     while (xQueueReceive(s_rx_queue, &item, portMAX_DELAY) == pdTRUE) {
-        ESP_LOGI(TAG, "rx %u bytes from " MACSTR, item.len, MAC2STR(item.src_mac));
+        // ESP_LOGI(TAG, "rx %u bytes from " MACSTR, item.len, MAC2STR(item.src_mac));
         /* TODO: forward to host over USB serial */
     }
 }

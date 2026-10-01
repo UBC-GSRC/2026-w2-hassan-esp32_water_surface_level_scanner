@@ -34,6 +34,7 @@ class ESP32SerialController:
         self.port.reset_input_buffer()
 
         msg = struct.pack(self.struct_rule, self.node_id, 0, True, False, 0)
+        print(f"Writing: {msg.hex()}")
         self.port.write(msg)
         time.sleep(0.1)
 
@@ -48,6 +49,7 @@ class ESP32SerialController:
         self.port.reset_input_buffer()
 
         msg = struct.pack(self.struct_rule, self.node_id, sensor_id, False, True, 0)
+        print(f"Writing: {msg.hex()}")
         self.port.write(msg)
         time.sleep(0.1)
 
@@ -68,6 +70,7 @@ class ESP32SerialController:
 
         try:
             node_id, sensor_id, camera_triggered, distance_measured, distance = struct.unpack(self.struct_rule, res_bytes) 
+            print(res_bytes)
             print(f"len={len(res_bytes)} {' '.join(f'{b:02X}' for b in res_bytes)}")
             print(f"Received response - Node ID: {node_id}, Sensor ID: {sensor_id}, Camera Triggered: {camera_triggered}, Distance Measured: {distance_measured}, Distance: {distance} mm")
             return node_id, sensor_id, camera_triggered, distance_measured, distance
@@ -77,7 +80,7 @@ class ESP32SerialController:
             return -1
 def main():
     try:
-        controller = ESP32SerialController("COM20")
+        controller = ESP32SerialController("COM31")
         # Example usage
         print("Press Enter to call function")
 
