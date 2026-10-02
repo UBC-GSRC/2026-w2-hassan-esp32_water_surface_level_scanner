@@ -19,6 +19,8 @@ There are a few basic apps which test small functionalities. These are not that 
 
 ## Getting Started
 
+1. Install the python packages using 
+
 1. Determine which COM port the ESP32's are on respectively
 2. Compile data_bridge and sensor_controller apps
 3. Run the commands in `pytest_command.txt` but change the COM ports
