@@ -93,7 +93,7 @@ void wifi_sta_init(void)
 
   uint8_t my_esp_mac[6] = {};
   esp_read_mac(my_esp_mac, ESP_MAC_WIFI_STA);
-  ESP_LOGI(TAG, "my mac address " MACSTR "", my_esp_mac[0], my_esp_mac[1], my_esp_mac[2], my_esp_mac[3], my_esp_mac[4], my_esp_mac[5]);
+//   ESP_LOGI(TAG, "my mac address " MACSTR "", my_esp_mac[0], my_esp_mac[1], my_esp_mac[2], my_esp_mac[3], my_esp_mac[4], my_esp_mac[5]);
 }
 
 void app_main(void)
@@ -134,6 +134,7 @@ void app_main(void)
     memcpy(peer_info.peer_addr, peer_mac, 6);
     esp_now_add_peer(&peer_info);
 
+    printf("READY_SERIAL\n");
 
     while(1)
     {

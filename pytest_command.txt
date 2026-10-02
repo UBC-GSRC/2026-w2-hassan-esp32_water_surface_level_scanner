@@ -1,0 +1,4 @@
+pytest test_initialize_new_setup.py `
+--embedded-services esp,idf `
+--app-path "./data_bridge|./sensor_controller" `
+--port "COM31|COM20"

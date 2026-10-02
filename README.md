@@ -7,7 +7,8 @@ We ran this device on the 18m flume for a two month long experiment. Around a sp
 Manual measurements were coordinated to be taken at the same time the sensor took the scans for us to compare. Manual measurements are very difficult to take as the water oscillates multiple cm while you're trying to pick the right number. 
 
 ## Components
-- ESP32C5 x 2
+- Waveshare ESP32S3 Zero (data_bridge)
+- Waveshare ESP32S3 ETH-8DI-8RO (sensor_controller)
 - URM14 Ultrasonic Distance Sensor DFRobot
 - RS485 Transceiver module Sparkfun
 - 12V 750mA power supply
