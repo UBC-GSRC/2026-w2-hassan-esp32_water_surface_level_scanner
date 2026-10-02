@@ -19,12 +19,14 @@
 #define BUF_SIZE (1024)
 #define ECHO_TASK_STACK_SIZE (4096)
 
+uint8_t start_byte = 0xAF;
 uint8_t peer_mac[6] = {0xac,0xa7,0x04,0x2e,0x21,0x78}; // Address of data acquisition esp32
-
 uint8_t esp_mac[6];
 static const char* TAG = "ESP-NOW RX";
+
 void esp_now_recv_callback(const esp_now_recv_info_t * esp_now_info, const uint8_t *data, int data_len)
 {
+  usb_serial_jtag_write_bytes(&start_byte, 1, 20 / portTICK_PERIOD_MS);  
   usb_serial_jtag_write_bytes((const char *) data, data_len, 20 / portTICK_PERIOD_MS);  
 }
 void wifi_sta_init(void)
@@ -83,13 +85,23 @@ void app_main(void)
         return;
     }
 
-    while (1) {
-        int len = usb_serial_jtag_read_bytes(data, (BUF_SIZE), 20 / portTICK_PERIOD_MS);
+    printf("READY_SERIAL\n");
 
-        // Forward message from serial jtag to esp now peer
-        if (len) {
-            esp_err_t err = esp_now_send(peer_mac, (uint8_t *)data, len);
-            vTaskDelay(pdMS_TO_TICKS(50));
+    uint8_t start;
+    while (1) {
+
+        if (usb_serial_jtag_read_bytes(&start, 1, 20 / portTICK_PERIOD_MS) == 1)
+        {
+            if (start == start_byte) {
+                int len = usb_serial_jtag_read_bytes(data, (BUF_SIZE), 20 / portTICK_PERIOD_MS);
+                // Forward message from serial jtag to esp now peer
+                if (len == sizeof(data_packet_t)) {
+                    esp_err_t err = esp_now_send(peer_mac, (uint8_t *)data, len);
+                    vTaskDelay(pdMS_TO_TICKS(50));
+                }
+            }
         }
+
+
     }
 }

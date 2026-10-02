@@ -13,9 +13,13 @@ import serial
 import struct
 import time
 
+NODE_ID_SELF = 0
+NODE_ID_PEER = 1
+START_BYTE = b'\xAF'
+
 class ESP32SerialController:
     def __init__(self,com = "COM4"):
-        self.node_id = 0 # see type_definition/data_packet.h for type definition
+        self.node_id = NODE_ID_SELF # see type_definition/data_packet.h for type definition
         self.struct_rule = '<BB??H' # 2 + 1 + 1 + 2 = 5 bytes: 2 unsigned char, 2 bools, 1 unsigned short see format character table https://docs.python.org/3/library/struct.html#format-characters
         self.buffer_size = 1024 
         
@@ -35,6 +39,7 @@ class ESP32SerialController:
 
         msg = struct.pack(self.struct_rule, self.node_id, 0, True, False, 0)
         print(f"Writing: {msg.hex()}")
+        self.port.write(START_BYTE)
         self.port.write(msg)
         time.sleep(0.1)
 
@@ -50,6 +55,7 @@ class ESP32SerialController:
 
         msg = struct.pack(self.struct_rule, self.node_id, sensor_id, False, True, 0)
         print(f"Writing: {msg.hex()}")
+        self.port.write(START_BYTE)
         self.port.write(msg)
         time.sleep(0.1)
 
@@ -66,14 +72,17 @@ class ESP32SerialController:
 
     def read_response(self):
         # wait for response from data_bridge for distance measurement
-        res_bytes = self.port.read(6) # read 5 bytes for the response
+        res_bytes = self.port.read(1 + 6) # read 6 bytes for the response and 1 for start byte
 
         try:
-            node_id, sensor_id, camera_triggered, distance_measured, distance = struct.unpack(self.struct_rule, res_bytes) 
-            print(res_bytes)
-            print(f"len={len(res_bytes)} {' '.join(f'{b:02X}' for b in res_bytes)}")
-            print(f"Received response - Node ID: {node_id}, Sensor ID: {sensor_id}, Camera Triggered: {camera_triggered}, Distance Measured: {distance_measured}, Distance: {distance} mm")
-            return node_id, sensor_id, camera_triggered, distance_measured, distance
+            if (res_bytes[0] == START_BYTE[0]):
+                node_id, sensor_id, camera_triggered, distance_measured, distance = struct.unpack(self.struct_rule, res_bytes[1:]) # Skip starting byte 
+                print(res_bytes)
+                print(f"len={len(res_bytes)} {' '.join(f'{b:02X}' for b in res_bytes)}")
+                print(f"Received response - Node ID: {node_id}, Sensor ID: {sensor_id}, Camera Triggered: {camera_triggered}, Distance Measured: {distance_measured}, Distance: {distance} mm")
+                return node_id, sensor_id, camera_triggered, distance_measured, distance
+            else:
+                print(f"Invalid start byte received: {res_bytes[0]}")
         except struct.error as e :
             print(f"Error unpacking serial data: {e}")
             print(f"Received bytes: {res_bytes}")
