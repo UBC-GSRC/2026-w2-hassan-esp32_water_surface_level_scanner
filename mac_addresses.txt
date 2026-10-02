@@ -1,0 +1,5 @@
+Mac Addresses 
+
+    18m camera cart:
+        - data acquisition esp32-s3-eth-8di-8ro: ac:a7:04:2e:21:78
+        - data bridge esp32-s3-zero: 3c:0f:02:e4:74:24

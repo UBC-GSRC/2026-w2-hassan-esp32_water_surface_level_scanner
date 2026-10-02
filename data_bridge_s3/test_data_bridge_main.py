@@ -1,3 +1,8 @@
+# For this to run, 
+# 1. you need to have a link set up between this host computer and the data bridge via USB. 
+# 2. The sensor controller needs to be powered on but does not need to be connected via usb to the host.
+# 3. You also need to make sure that the data bridge and sensor controller's peer mac addresses are set up correctly. 
+# If you haven't set up mac addresses, or need to find them, you can run this pytest and scroll through the terminal output and find the printed address. 
 from pytest_embedded import Dut
 import struct 
 
