@@ -1,5 +1,5 @@
 # Water Surface Scanner Electronics V1.0 
-An 18m flume in the Flume Lab at UBC can benefit from having better water surface level data during experiments. The flume is already equipped with a Parker linear rail that traverses the length of the flume. This project is to avoid the mess of adding another wire connection to the cart on the linear rail. Another ESP32 is needed for ESP-NOW.
+This system is made to create a system which can control modbus ultrasonic distance sensors and cameras using relays.  
 
 ## Testing
 
@@ -10,16 +10,16 @@ Manual measurements were coordinated to be taken at the same time the sensor too
 - Waveshare ESP32S3 Zero (data_bridge)
 - Waveshare ESP32S3 ETH-8DI-8RO (sensor_controller)
 - URM14 Ultrasonic Distance Sensor DFRobot
-- RS485 Transceiver module Sparkfun
+- TRS cables to trigger the shutter of a camera 
 - 12V 750mA power supply
--
 
 ## Examples for ESP-IDF
+There are a few basic apps which test small functionalities. These are not that useful once the final app is built, but this helped us make incremental upgrades to the main app along the way. 
 - examples/
 
 ## Function
 
-There are three computers involved in this system. The first computer is an ESP32C5 (Data Acquisition ESP32) connected directly to the distance sensor / cameras and sends data to the second ESP32. The second is another ESP32C5 (Data Bridge ESP32) which receives the data from the Data Acquisition ESP32. The Data Bridge uses a wired serial connection directly to the host computer. The data bridge is a convenient way to not need to wire another really long wire along the flume. The host computer (Camera Cart Computer) gets the data and uses Python to convert the data into the desired coordinate reference system.
+There are three computers involved in this system. The first is an ESP32S3 8 channel relay board (Sensor controller ESP32) connected directly to the distance sensor / cameras and sends data to the second ESP32. The second is another ESP32S3 (Data Bridge ESP32) which receives the data from the Data Acquisition ESP32. The Data Bridge uses a wired serial connection directly to the host computer. The data bridge is a convenient way to not need to wire another really long wire along the flume. Connecting directly to the sensor controller does not work in it's current state. There would need to be some better serial communication techniques implemented to make this work. 
 
 ### Data Acquisition ESP32
 
