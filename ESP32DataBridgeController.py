@@ -17,7 +17,7 @@ NODE_ID_SELF = 0
 NODE_ID_PEER = 1
 START_BYTE = b'\xAF'
 
-class ESP32SerialController:
+class ESP32DataBridgeController:
     def __init__(self,com = "COM4"):
         self.node_id = NODE_ID_SELF # see type_definition/data_packet.h for type definition
         self.struct_rule = '<BB??H' # 2 + 1 + 1 + 2 = 5 bytes: 2 unsigned char, 2 bools, 1 unsigned short see format character table https://docs.python.org/3/library/struct.html#format-characters
@@ -89,7 +89,7 @@ class ESP32SerialController:
             return -1
 def main():
     try:
-        controller = ESP32SerialController("COM31")
+        controller = ESP32DataBridgeController("COM31")
         # Example usage
         print("Press Enter to call function")
 
