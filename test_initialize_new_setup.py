@@ -1,49 +1,41 @@
-# This test needs both the data bridge and sensor controller to be connected to the host. If you want to just test the data bridge, run ESP32SerialController separately 
-
+# Two DUTs, same command you used before (bridge first, sensor controller second):
+#   pytest --count 2 --port 'COM31|<SENSOR_PORT>' --embedded-services esp,idf \
+#          --app-path '<bridge_app>|<sensor_app>' --skip-autoflash y
+# dut[0] = data bridge, dut[1] = sensor controller. pytest-embedded owns both ports and
+# the controller class talks to the bridge THROUGH dut[0], so nothing fights over COM31.
 import pytest
-import struct
+import time
+from data_bridge_controller.ESP32DataBridgeControllerDut import ESP32DataBridgeControllerDut
 
-start_byte = b'\xAF'
-sensor_ids = [1, 2, 3, 4]
-struct_rule = "<BB??H"
+SENSOR_IDS = [1, 2, 3, 4]
+MAX_COUNT = 500
 
-def trigger_camera_and_sensors(data_bridge, sensor_controller):
-    """Wireless trigger camera and sensor using ESP-NOW."""
-    for sensor_id in sensor_ids:
-            packet = struct.pack(
-                struct_rule,
-                0, # node_id
-                sensor_id, # sensor_id
-                1, # trigger_shutter
-                1, # measure_distance
-                0 # distance_mm
-            )
-            data_bridge.write(start_byte)
-            data_bridge.write(packet)
 
-            # Expect 
-            match = data_bridge.expect(rb"\xAF(.{6})")
+@pytest.fixture
+def bridge(dut):
+    bridge_dut, _sensor_dut = dut
+    return ESP32DataBridgeControllerDut(bridge_dut)
 
-            payload = match.group(1)
-            assert len(payload) == 6
 
-            node_id, sensor_id, camera_triggered, distance_measured, distance = struct.unpack(struct_rule, payload) 
-            print("pytest: Received packet from sensor controller: node_id={}, sensor_id={}, camera_triggered={}, distance_measured={}, distance={}".format(node_id, sensor_id, camera_triggered, distance_measured, distance))
+def test_read_sensors(dut, bridge):
+    _bridge_dut, sensor_dut = dut
+    sensor_dut.expect("READY", timeout=10)
+    print("pytest: Sensor controller is ready.")
 
-        
+    assert bridge.trigger_camera()
+    time.sleep(0.5)
+    assert bridge.trigger_camera()
 
-@pytest.mark.parametrize('count', [2], indirect=True)
-def test_espnow(dut):
-    data_bridge, sensor_controller = dut
+    count = 0
+    while count < MAX_COUNT:
+        for sensor_id in SENSOR_IDS:
+            count += 1
+            d = bridge.get_distance(sensor_id)
+            print(f"pytest: {sensor_id} : {d} mm")
+            assert d > 0, f"request {count}: sensor {sensor_id} returned {d}"
 
-    data_bridge.expect("READY_SERIAL")
-    sensor_controller.expect("READY_SERIAL")
+    print(f"pytest: {count} distance requests completed.")
 
-    print("pytest: Data bridge and sensor controller are ready.")
-    
-    # Send a packet to control the sensor controller for each sensor
-    trigger_camera_and_sensors(data_bridge, sensor_controller)
-    
-    print('pytest: All sensor packets sent and received successfully.')
-    print('pytest: Firmware loaded to both data bridge and sensor controller successfully. All sensors work. Test completed.')
+    sensor_dut.expect("Triggering camera shutter", timeout=5)
 
+    print("pytest: All sensor packets sent and received successfully.")

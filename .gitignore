@@ -1,3 +1,6 @@
 /.vscode/**
 **/managed_components/**
 **/build/** 
+*.log
+*.cpython
+*.pyc

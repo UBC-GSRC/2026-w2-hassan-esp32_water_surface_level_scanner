@@ -1,112 +1,167 @@
-# This controller needs to do a few things
-# 1. Send serial messages packaged in a struct for the data_bridge ESP32 to read and relay to data_acquisition
-# 2. Listen to the serial messages from the data_bridge and get the data 
-# 3. Be used by another program to perform a bedscan by calling all the functions in this controller
-# Resources on struct packing & serial in python: https://alknemeyer.github.io/embedded-comms-with-python/
-
-# From a higher level this controller will allow for 
-# 1. request camera trigger returning an acknowledgement
-# 2. request distance measurement returning a distance value 
-
-# This means the data_bridge will listen to a UART, decode the message into a struct, and act accordingly
-import serial
 import struct
 import time
+import serial
 
+SOF = 0xAF
+MAX_BODY = 32
+PACKET_RULE = "<BB??H"          # node_id, sensor_id, trigger_shutter, measure_distance, distance_mm
+PACKET_SIZE = struct.calcsize(PACKET_RULE)   # 6
 NODE_ID_SELF = 0
-NODE_ID_PEER = 1
-START_BYTE = b'\xAF'
+
+
+def crc8(data: bytes) -> int:
+    c = 0
+    for b in data:
+        c ^= b
+        for _ in range(8):
+            c = ((c << 1) ^ 0x07) & 0xFF if c & 0x80 else (c << 1) & 0xFF
+    return c
+
+
+class BridgeError(Exception):
+    pass
+
 
 class ESP32DataBridgeController:
-    def __init__(self,com = "COM4"):
-        self.node_id = NODE_ID_SELF # see type_definition/data_packet.h for type definition
-        self.struct_rule = '<BB??H' # 2 + 1 + 1 + 2 = 5 bytes: 2 unsigned char, 2 bools, 1 unsigned short see format character table https://docs.python.org/3/library/struct.html#format-characters
-        self.buffer_size = 1024 
-        
+    def __init__(self, com="COM4", baud=115200, timeout_s=1.0, retries=3):
+        self.com = com
+        self.baud = baud
+        self.timeout_s = timeout_s
+        self.retries = retries
+        self.seq = 0
+        self.rx = bytearray()
+        self.ser = None
+        self._open()
+
+    # ---------- port handling ----------
+
+    def _open(self):
+        if self.ser is not None:
+            try:
+                self.ser.close()
+            except Exception:
+                pass
+        self.ser = serial.Serial(self.com, baudrate=self.baud, timeout=0.02, write_timeout=1.0)
+        self.rx.clear()
+        self.ser.reset_input_buffer()
+
+    def _hard_reset_bridge(self):
+        """Best-effort reset of an ESP32 over USB-Serial-JTAG via RTS (esptool-style)."""
         try:
-            self.port = serial.Serial(com, baudrate=115200, timeout=None)
-            self.port.open()
-            print("Successfully opened port")
-        except serial.SerialException as e:
-            print(f"Error opening serial port: {e}")
+            self.ser.dtr = False
+            self.ser.rts = True
+            time.sleep(0.1)
+            self.ser.rts = False
+            time.sleep(1.5)  # wait for boot
+        except Exception:
+            pass
+        self._open()
 
-    def __del__(self):
-        if self.port is not None:
-            self.port.close()
+    def close(self):
+        if self.ser is not None and self.ser.is_open:
+            self.ser.close()
 
-    def trigger_camera(self)->bool:
-        self.port.reset_input_buffer()
+    def __enter__(self):
+        return self
 
-        msg = struct.pack(self.struct_rule, self.node_id, 0, True, False, 0)
-        print(f"Writing: {msg.hex()}")
-        self.port.write(START_BYTE)
-        self.port.write(msg)
-        time.sleep(0.1)
+    def __exit__(self, *exc):
+        self.close()
 
-        # wait for response from data_bridge for camera trigger acknowledgement
-        node_id, sensor_id, camera_triggered, distance_measured, distance = self.read_response()
+    # ---------- framing ----------
 
-        time.sleep(1) 
+    @staticmethod
+    def _frame(body: bytes) -> bytes:
+        length = bytes([len(body)])
+        return bytes([SOF]) + length + body + bytes([crc8(length + body)])
 
-        return camera_triggered # return the camera trigger acknowledgement from the data_bridge
-    
-    def get_distance(self, sensor_id = 0)->int:
-        self.port.reset_input_buffer()
+    def _read_frame(self, timeout_s):
+        """Return a validated body, or None on timeout. Resyncs past garbage and log text."""
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            chunk = self.ser.read(self.ser.in_waiting or 1)
+            if chunk:
+                self.rx += chunk
 
-        msg = struct.pack(self.struct_rule, self.node_id, sensor_id, False, True, 0)
-        print(f"Writing: {msg.hex()}")
-        self.port.write(START_BYTE)
-        self.port.write(msg)
-        time.sleep(0.1)
+            while True:
+                i = self.rx.find(bytes([SOF]))
+                if i < 0:
+                    self.rx.clear()
+                    break
+                del self.rx[:i]
+                if len(self.rx) < 2:
+                    break
+                n = self.rx[1]
+                if n == 0 or n > MAX_BODY:
+                    del self.rx[0]          # not a real frame start, resync
+                    continue
+                if len(self.rx) < n + 3:
+                    break                    # need more bytes
+                body = bytes(self.rx[2:2 + n])
+                if crc8(bytes([n]) + body) == self.rx[2 + n]:
+                    del self.rx[:n + 3]
+                    return body
+                del self.rx[0]               # bad CRC, resync
+        return None
 
-        # Clear any garbage data in the input buffer before reading the response
+    # ---------- request/response ----------
 
-        node_id, sensor_id, camera_triggered, distance_measured, distance = self.read_response()
+    def _transact(self, packet: bytes):
+        self.seq = (self.seq + 1) & 0xFF
+        seq = self.seq
+        frame = self._frame(bytes([seq]) + packet)
 
-        time.sleep(0.1)
+        last_err = "timeout"
+        for attempt in range(self.retries):
+            try:
+                self.ser.reset_input_buffer()
+                self.rx.clear()
+                self.ser.write(frame)
+                deadline = time.monotonic() + self.timeout_s
+                while time.monotonic() < deadline:
+                    body = self._read_frame(deadline - time.monotonic())
+                    if body is None:
+                        break
+                    if len(body) == 1 + PACKET_SIZE and body[0] == seq:
+                        return struct.unpack(PACKET_RULE, body[1:])
+                    # wrong seq or length: stale reply, keep waiting
+            except serial.SerialException as e:
+                last_err = str(e)
+                time.sleep(0.5)
+                try:
+                    self._open()
+                except Exception:
+                    pass
 
-        if distance != 65535:
-            return distance / 10 # decimal unpacking
-        else:
-            return -1 # error value for distance measurement failure
+            if attempt == self.retries - 2:
+                self._hard_reset_bridge()   # last resort before the final attempt
 
-    def read_response(self):
-        # wait for response from data_bridge for distance measurement
-        res_bytes = self.port.read(1 + 6) # read 6 bytes for the response and 1 for start byte
+        raise BridgeError(f"No valid response after {self.retries} attempts ({last_err})")
 
-        try:
-            if (res_bytes[0] == START_BYTE[0]):
-                node_id, sensor_id, camera_triggered, distance_measured, distance = struct.unpack(self.struct_rule, res_bytes[1:]) # Skip starting byte 
-                print(res_bytes)
-                print(f"len={len(res_bytes)} {' '.join(f'{b:02X}' for b in res_bytes)}")
-                print(f"Received response - Node ID: {node_id}, Sensor ID: {sensor_id}, Camera Triggered: {camera_triggered}, Distance Measured: {distance_measured}, Distance: {distance} mm")
-                return node_id, sensor_id, camera_triggered, distance_measured, distance
-            else:
-                print(f"Invalid start byte received: {res_bytes[0]}")
-        except struct.error as e :
-            print(f"Error unpacking serial data: {e}")
-            print(f"Received bytes: {res_bytes}")
-            return -1
-def main():
-    try:
-        controller = ESP32DataBridgeController("COM31")
-        # Example usage
-        print("Press Enter to call function")
+    # ---------- public API ----------
 
-        urm14_sensors = [1, 2, 3, 4]
-        while (1):
-            input()
-            camera_shutter = controller.trigger_camera()
-            print(f"Camera shutter triggered: {camera_shutter}")
+    def trigger_camera(self) -> bool:
+        # Sets all relays to open
+        pkt = struct.pack(PACKET_RULE, NODE_ID_SELF, 0, True, False, 0)
+        _, _, camera_triggered, _, _ = self._transact(pkt)
 
-            for id in urm14_sensors:
-                distance = controller.get_distance(sensor_id=id)
-                print(f"Distance measured: {distance} mm")
-                # time.sleep(0.05)
-    except KeyboardInterrupt:
-        if controller.port.is_open:
-            controller.port.close()
+        time.sleep(1)
+
+        # Sets all relays back to closed
+        pkt = struct.pack(PACKET_RULE, NODE_ID_SELF, 0, False, False, 0)
+        _, _, _, _, _ = self._transact(pkt)
+        return camera_triggered
+
+    def get_distance(self, sensor_id: int):
+        pkt = struct.pack(PACKET_RULE, NODE_ID_SELF, sensor_id, False, True, 0)
+        _, _, _, _, distance = self._transact(pkt)
+        return -1 if distance == 0xFFFF else distance / 10
 
 
 if __name__ == "__main__":
-    main()
+    counter = 0
+    with ESP32DataBridgeController("COM31") as bridge:
+        while counter < 2000:
+            for sid in (1, 2, 3, 4):
+                counter += 1
+                d = bridge.get_distance(sid)
+                print(f"{counter}: sensor {sid} -> {d}")

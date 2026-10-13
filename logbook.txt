@@ -1,0 +1,15 @@
+# 2026-10-13 10:13
+
+Going to get the pytests to work again and attempt to attach everything to the cart again.
+
+Added a ESP32DataBridgeController class which works with the pytest-embedded dut's so it doesn't fight for the serial port. 
+
+Changed the pytest_command.txt to add the count parameter.
+
+# 2026-10-07 10:17 
+
+This is the first log entry. Despite working on this quite a bit beforehand. Better late than never.
+
+There is a bug where one of the two esp32's fails after about 146 sensor requests. I found this out while doing scans on the 18m flume. There are more than 146 necessary reads across the whole flume. I'm not sure where the bug is quite yet but it is likely an overflow of sorts. 
+
+Put the program into Claude and it popped out functional code... kind of exciting and heartbreaking at the same time.

@@ -1,107 +1,169 @@
-// code a combination of https://esp32.com/viewtopic.php?t=43647, https://github.com/espressif/esp-idf/issues/11948#issuecomment-1653019021, https://github.com/espressif/esp-idf/issues/11948#issuecomment-1653019021
-// The data bridge needs to do the following
-// 1. Repeat all messages to ESPNOW peer(s) when received over USB serial connection
-// 2. Repeat all messages received from ESPNOW peer(s) to USB serial connection 
+// Data bridge: USB-Serial-JTAG <-> ESP-NOW, framed + CRC protocol.
+// Frame: [0xAF][len][body (len bytes)][crc8 over len+body]
+// The bridge treats the body as opaque bytes and never needs data_packet_t.
+//
+// menuconfig: set the console to UART or NONE so logs never share the USB data channel.
 
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <stdio.h>
-#include "esp_system.h"
+#include "freertos/queue.h"
 #include "esp_log.h"
-#include "string.h"
-#include "driver/usb_serial_jtag.h"
 #include "esp_wifi.h"
-#include "esp_mac.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 #include "esp_now.h"
 #include "nvs_flash.h"
-#include "data_packet.h" 
+#include "driver/usb_serial_jtag.h"
 
-#define BUF_SIZE (1024)
-#define ECHO_TASK_STACK_SIZE (4096)
+#define SOF        0xAF
+#define MAX_BODY   32
+#define RX_CHUNK   64
 
-uint8_t start_byte = 0xAF;
-uint8_t peer_mac[6] = {0xac,0xa7,0x04,0x2e,0x21,0x78}; // Address of data acquisition esp32
-uint8_t esp_mac[6];
-static const char* TAG = "ESP-NOW RX";
+static const uint8_t peer_mac[6] = {0xac, 0xa7, 0x04, 0x2e, 0x21, 0x78}; // sensor node
 
-void esp_now_recv_callback(const esp_now_recv_info_t * esp_now_info, const uint8_t *data, int data_len)
+typedef struct {
+    uint8_t len;
+    uint8_t body[MAX_BODY];
+} msg_t;
+
+static QueueHandle_t to_host_q;
+
+static uint8_t crc8(const uint8_t *d, size_t n)
 {
-  usb_serial_jtag_write_bytes(&start_byte, 1, 20 / portTICK_PERIOD_MS);  
-  usb_serial_jtag_write_bytes((const char *) data, data_len, 20 / portTICK_PERIOD_MS);  
+    uint8_t c = 0;
+    while (n--) {
+        c ^= *d++;
+        for (int i = 0; i < 8; i++) {
+            c = (c & 0x80) ? (uint8_t)((c << 1) ^ 0x07) : (uint8_t)(c << 1);
+        }
+    }
+    return c;
 }
-void wifi_sta_init(void)
+
+// ---------------- ESP-NOW ----------------
+
+static void on_send(const wifi_tx_info_t *t, esp_now_send_status_t s)
+{
+    (void)t; (void)s; // no logging here
+}
+
+static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
+{
+    if (len <= 0 || len > MAX_BODY) return;
+    msg_t m = { .len = (uint8_t)len };
+    memcpy(m.body, data, len);
+    xQueueSend(to_host_q, &m, 0); // never block in the Wi-Fi task
+}
+
+static void wifi_init(void)
 {
     esp_err_t ret = nvs_flash_init();
-  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
-  {
-    nvs_flash_erase();
-    ret = nvs_flash_init();
-  }
-  esp_netif_init();
-  esp_event_loop_create_default();
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
-  esp_wifi_set_mode(WIFI_MODE_STA);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_ps(WIFI_PS_NONE);
-  esp_wifi_start();
-  esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+    esp_netif_init();
+    esp_event_loop_create_default();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    esp_wifi_init(&cfg);
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_start();
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
+}
 
-  esp_read_mac(esp_mac, ESP_MAC_WIFI_STA);
+// ---------------- Device -> host ----------------
 
-  // NOTE: Uncomment to get the MAC address of the ESP32 that is running this firmware
-  // ESP_LOGI(TAG, "peer mac " MACSTR "", esp_mac[0], esp_mac[1], esp_mac[2], esp_mac[3], esp_mac[4], esp_mac[5]);
+static void host_tx_task(void *arg)
+{
+    msg_t m;
+    uint8_t frame[MAX_BODY + 3];
+    for (;;) {
+        if (xQueueReceive(to_host_q, &m, portMAX_DELAY) != pdTRUE) continue;
+        frame[0] = SOF;
+        frame[1] = m.len;
+        memcpy(&frame[2], m.body, m.len);
+        frame[2 + m.len] = crc8(&frame[1], 1 + m.len);
+        // One write per frame. Result ignored on purpose: the host retries.
+        usb_serial_jtag_write_bytes(frame, 3 + m.len, pdMS_TO_TICKS(100));
+    }
+}
+
+// ---------------- Host -> device parser ----------------
+
+typedef enum { S_SOF, S_LEN, S_BODY, S_CRC } state_t;
+static state_t st = S_SOF;
+static uint8_t blen, bidx, body[MAX_BODY];
+
+static void feed(uint8_t b)
+{
+    switch (st) {
+    case S_SOF:
+        if (b == SOF) st = S_LEN;
+        break;
+    case S_LEN:
+        if (b == 0 || b > MAX_BODY) {
+            st = (b == SOF) ? S_LEN : S_SOF; // resync
+        } else {
+            blen = b; bidx = 0; st = S_BODY;
+        }
+        break;
+    case S_BODY:
+        body[bidx++] = b;
+        if (bidx == blen) st = S_CRC;
+        break;
+    case S_CRC: {
+        uint8_t tmp[MAX_BODY + 1];
+        tmp[0] = blen;
+        memcpy(&tmp[1], body, blen);
+        if (crc8(tmp, blen + 1) == b) {
+            esp_now_send(peer_mac, body, blen);
+        }
+        st = S_SOF;
+        break;
+    }
+    }
 }
 
 void app_main(void)
 {
-    // Turn off logging 
     esp_log_level_set("*", ESP_LOG_NONE);
 
-    // Configure ESP-NOW peer information
-    wifi_sta_init();
+    wifi_init();
     esp_now_init();
-    esp_now_register_recv_cb(esp_now_recv_callback);
+    esp_now_register_recv_cb(on_recv);
+    esp_now_register_send_cb(on_send);
 
-    esp_now_peer_info_t peer_info = {0};
-    peer_info.channel = 1; 
-    peer_info.encrypt = false;
+    esp_now_peer_info_t peer = {0};
+    peer.channel = 1;
+    peer.encrypt = false;
+    memcpy(peer.peer_addr, peer_mac, 6);
+    esp_now_add_peer(&peer);
 
-    memcpy(peer_info.peer_addr, peer_mac, 6);
-    esp_now_add_peer(&peer_info);
+    to_host_q = xQueueCreate(16, sizeof(msg_t));
+    configASSERT(to_host_q);
 
-    // Configure USB SERIAL JTAG
-    usb_serial_jtag_driver_config_t usb_serial_jtag_config = {
-        .rx_buffer_size = BUF_SIZE,
-        .tx_buffer_size = BUF_SIZE,
+    usb_serial_jtag_driver_config_t cfg = {
+        .rx_buffer_size = 1024,
+        .tx_buffer_size = 1024,
     };
+    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&cfg));
 
-    ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb_serial_jtag_config));
+    xTaskCreate(host_tx_task, "host_tx", 4096, NULL, 5, NULL);
 
-    // Configure a temporary buffer for the incoming data
-    uint8_t *data = (uint8_t *) malloc(BUF_SIZE);
-    if (data == NULL) {
-        ESP_LOGE("usb_serial_jtag echo", "no memory for data");
-        return;
-    }
+    uint8_t buf[RX_CHUNK];
+    TickType_t last_rx = xTaskGetTickCount();
 
-    printf("READY_SERIAL\n");
-
-    uint8_t start;
-    while (1) {
-
-        if (usb_serial_jtag_read_bytes(&start, 1, 20 / portTICK_PERIOD_MS) == 1)
-        {
-            if (start == start_byte) {
-                int len = usb_serial_jtag_read_bytes(data, (BUF_SIZE), 20 / portTICK_PERIOD_MS);
-                // Forward message from serial jtag to esp now peer
-                if (len == sizeof(data_packet_t)) {
-                    esp_err_t err = esp_now_send(peer_mac, (uint8_t *)data, len);
-                    vTaskDelay(pdMS_TO_TICKS(50));
-                }
-            }
+    for (;;) {
+        int n = usb_serial_jtag_read_bytes(buf, sizeof(buf), pdMS_TO_TICKS(20));
+        if (n > 0) {
+            last_rx = xTaskGetTickCount();
+            for (int i = 0; i < n; i++) feed(buf[i]);
+        } else if (st != S_SOF &&
+                   (xTaskGetTickCount() - last_rx) > pdMS_TO_TICKS(50)) {
+            st = S_SOF; // abandon a half-received frame
         }
-
-
     }
 }
