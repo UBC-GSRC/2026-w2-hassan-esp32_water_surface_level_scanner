@@ -20,7 +20,7 @@
 #define MAX_BODY   32
 #define RX_CHUNK   64
 
-static const uint8_t peer_mac[6] = {0xac, 0xa7, 0x04, 0x2e, 0x21, 0x78}; // sensor node
+static const uint8_t peer_mac[6] = {0x14, 0xc1, 0x9f, 0x20, 0x3b, 0xc4}; // sensor node
 
 typedef struct {
     uint8_t len;
