@@ -1,5 +1,9 @@
 Mac Addresses 
 
     18m camera cart:
-        - data acquisition esp32-s3-eth-8di-8ro: ac:a7:04:2e:21:78
+        - sensor controller esp32-s3-eth-8di-8ro: ac:a7:04:2e:21:78
         - data bridge esp32-s3-zero: 3c:0f:02:e4:74:24
+
+    lego flume cart:
+        - sensor controller: 14:c1:9f:20:3b:c4
+        - data bridge: 3c:0f:02:e4:ca:98
