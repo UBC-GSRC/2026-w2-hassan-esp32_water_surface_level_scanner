@@ -33,7 +33,7 @@ static const char *TAG = "Data Acquisition";
 static urm14_t sensors[MAX_SENSOR_ID];
 
 // MAC address of the data bridge
-static const uint8_t peer_mac[6] = {0x3c, 0x0f, 0x02, 0xe4, 0xca, 0x98};
+static const uint8_t peer_mac[6] = {0x3c, 0x0f, 0x02, 0xe4, 0x74, 0xc24};
 
 // Body carried inside the bridge's frame: seq + packet. The bridge forwards it untouched.
 typedef struct __attribute__((packed)) {
@@ -148,11 +148,11 @@ void app_main(void)
     // Relay board
     relay_board_init();
 
-    // URM14 sensors, initialized in place
-    // for (size_t i = 0; i < sensor_count && i < MAX_SENSOR_ID; i++) {
-    //     sensors[i] = (urm14_t){ .slave_addr = sensor_addresses[i] };
-    //     urm14_init(&sensors[i]);
-    // }
+    URM14 sensors, initialized in place
+    for (size_t i = 0; i < sensor_count && i < MAX_SENSOR_ID; i++) {
+        sensors[i] = (urm14_t){ .slave_addr = sensor_addresses[i] };
+        urm14_init(&sensors[i]);
+    }
 
     // Job queue and worker task must exist before ESP-NOW can deliver messages
     job_q = xQueueCreate(8, sizeof(job_t));
